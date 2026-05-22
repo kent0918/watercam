@@ -31,6 +31,11 @@
             box-sizing: border-box;
             font-size: 16px;
         }
+        /* 讓輸入框右側出現下拉箭頭的提示 (依瀏覽器支援程度顯示) */
+        input::-webkit-calendar-picker-indicator {
+            opacity: 1;
+            cursor: pointer;
+        }
         .btn {
             display: block;
             width: 100%;
@@ -82,49 +87,123 @@
     
     <div class="form-group">
         <label>1. 選擇照片 (支援多選 / 直接拍照)</label>
-        <!-- 加入 multiple 屬性以支援多選 -->
         <input type="file" id="imageInput" accept="image/*" multiple>
     </div>
 
     <div class="form-group">
         <label>標題 (藍底)</label>
-        <input type="text" id="title" value="臺大總院-線路汰換">
+        <input type="text" id="title" value="臺大總院-線路汰換" list="list_title">
+        <datalist id="list_title"></datalist>
     </div>
     <div class="form-group">
         <label>案名</label>
-        <input type="text" id="projectName" value="網路線佈線汰換暨光纖線路及網路設備擴充案">
+        <input type="text" id="projectName" value="網路線佈線汰換暨光纖線路及網路設備擴充案" list="list_projectName">
+        <datalist id="list_projectName"></datalist>
     </div>
     <div class="form-group">
         <label>案號</label>
-        <input type="text" id="projectId" value="PA2300949">
+        <input type="text" id="projectId" value="PA2300949" list="list_projectId">
+        <datalist id="list_projectId"></datalist>
     </div>
     <div class="form-group">
         <label>施工地點</label>
-        <input type="text" id="location" value="東址研究棟9樓">
+        <input type="text" id="location" value="東址研究棟9樓" list="list_location">
+        <datalist id="list_location"></datalist>
     </div>
     <div class="form-group">
         <label>施工日期</label>
-        <input type="text" id="date" value="2026/05/19">
+        <input type="text" id="date" value="2026/05/22" list="list_date">
+        <datalist id="list_date"></datalist>
     </div>
     <div class="form-group">
         <label>施工內容</label>
-        <input type="text" id="content" value="配管佈線作業">
+        <input type="text" id="content" value="配管佈線作業" list="list_content">
+        <datalist id="list_content"></datalist>
     </div>
 
     <button class="btn" onclick="processImages()">產生浮水印圖片</button>
 
-    <!-- 用來存放多張預覽圖的容器 -->
     <div id="results-container"></div>
-
-    <!-- 批次下載按鈕 (預設隱藏) -->
     <button class="btn btn-warning" id="batchDownloadBtn" style="display: none;" onclick="downloadAll()">批次下載全部照片</button>
 </div>
 
 <script>
-    // 存放所有產生的 canvas 元素，方便批次下載
     let generatedCanvases = [];
+    // 必須追蹤的欄位 ID
+    const inputFields = ['title', 'projectName', 'projectId', 'location', 'date', 'content'];
 
-    // 當使用者變更檔案時，自動清空舊的結果並提示
+    // 網頁載入時執行：還原上次輸入狀態與下拉選單紀錄
+    window.onload = function() {
+        loadLastState();
+        updateAllDataLists();
+        
+        // 監聽輸入框變化：只要打字就自動存檔，避免重整遺失
+        inputFields.forEach(field => {
+            document.getElementById(field).addEventListener('input', saveCurrentState);
+        });
+    };
+
+    // 自動儲存目前的輸入狀態
+    function saveCurrentState() {
+        let currentState = {};
+        inputFields.forEach(field => {
+            currentState[field] = document.getElementById(field).value;
+        });
+        localStorage.setItem('watermark_current_state', JSON.stringify(currentState));
+    }
+
+    // 讀取上次的輸入狀態
+    function loadLastState() {
+        const savedState = localStorage.getItem('watermark_current_state');
+        if (savedState) {
+            try {
+                const parsedState = JSON.parse(savedState);
+                inputFields.forEach(field => {
+                    if (parsedState[field] !== undefined) {
+                        document.getElementById(field).value = parsedState[field];
+                    }
+                });
+            } catch (e) {
+                console.error("讀取狀態失敗", e);
+            }
+        }
+    }
+
+    // 將本次輸入的內容存入下拉選單歷史紀錄 (最多 10 筆)
+    function saveToHistory() {
+        inputFields.forEach(field => {
+            const val = document.getElementById(field).value.trim();
+            if (val !== "") {
+                let history = JSON.parse(localStorage.getItem(`history_${field}`)) || [];
+                // 如果已經存在相同的紀錄，先移除舊的，再把新的加到最前面
+                history = history.filter(item => item !== val);
+                history.unshift(val);
+                // 限制最多 10 筆
+                if (history.length > 10) {
+                    history = history.slice(0, 10);
+                }
+                localStorage.setItem(`history_${field}`, JSON.stringify(history));
+            }
+        });
+        updateAllDataLists();
+    }
+
+    // 更新所有下拉選單的選項
+    function updateAllDataLists() {
+        inputFields.forEach(field => {
+            const history = JSON.parse(localStorage.getItem(`history_${field}`)) || [];
+            const datalist = document.getElementById(`list_${field}`);
+            if (datalist) {
+                datalist.innerHTML = ''; // 清空舊選項
+                history.forEach(item => {
+                    const option = document.createElement('option');
+                    option.value = item;
+                    datalist.appendChild(option);
+                });
+            }
+        });
+    }
+
     document.getElementById('imageInput').addEventListener('change', function(e){
         document.getElementById('results-container').innerHTML = '';
         document.getElementById('batchDownloadBtn').style.display = 'none';
@@ -140,13 +219,16 @@
             return;
         }
 
-        // 清空前一次的結果
+        // 點擊產生時，將當前輸入存入歷史紀錄
+        saveToHistory();
+        // 確保當前狀態有被儲存
+        saveCurrentState();
+
         const container = document.getElementById('results-container');
         container.innerHTML = '';
         generatedCanvases = [];
         document.getElementById('batchDownloadBtn').style.display = 'none';
 
-        // 讀取每張圖片
         Array.from(files).forEach((file, index) => {
             const reader = new FileReader();
             reader.onload = function(event) {
@@ -161,26 +243,21 @@
     }
 
     function createWatermarkedCard(img, originalFilename, index) {
-        // 建立卡片容器
         const card = document.createElement('div');
         card.className = 'result-card';
 
-        // 檔名標籤
         const fileLabel = document.createElement('div');
         fileLabel.className = 'filename-label';
         fileLabel.innerText = `檔案：${originalFilename}`;
         card.appendChild(fileLabel);
 
-        // 建立 Canvas
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         
-        // 設定 Canvas 大小與原圖相同
         canvas.width = img.width;
         canvas.height = img.height;
         ctx.drawImage(img, 0, 0);
 
-        // --- 開始繪製浮水印 ---
         const title = document.getElementById('title').value;
         const texts = [
             `案名：${document.getElementById('projectName').value}`,
@@ -248,16 +325,12 @@
             ctx.fillText(line, textX, currentY);
             currentY += lineSpacing;
         });
-        // --- 結束繪製浮水印 ---
 
-        // 將完成的 canvas 加入到陣列中以供批次下載
         const dlFilename = `工程照片_${index}_${new Date().getTime()}.jpg`;
         generatedCanvases.push({ canvas: canvas, filename: dlFilename });
 
-        // 將 Canvas 加入卡片
         card.appendChild(canvas);
 
-        // 建立單張下載按鈕
         const downloadBtn = document.createElement('button');
         downloadBtn.className = 'btn btn-success';
         downloadBtn.innerText = '下載此照片';
@@ -266,10 +339,8 @@
         };
         card.appendChild(downloadBtn);
 
-        // 將卡片加入到主畫面
         document.getElementById('results-container').appendChild(card);
 
-        // 顯示批次下載按鈕 (如果有多於一張照片)
         if(generatedCanvases.length > 0) {
             document.getElementById('batchDownloadBtn').style.display = 'block';
         }
@@ -279,7 +350,7 @@
         const link = document.createElement('a');
         link.download = filename;
         link.href = canvas.toDataURL('image/jpeg', 0.95);
-        document.body.appendChild(link); // 某些瀏覽器需要將 a 標籤加入 DOM 才能點擊
+        document.body.appendChild(link); 
         link.click();
         document.body.removeChild(link);
     }
@@ -287,13 +358,12 @@
     function downloadAll() {
         if(generatedCanvases.length === 0) return;
         
-        // 為了避免手機瀏覽器阻擋同時彈出多個下載，設定微小的延遲依序下載
         let delay = 0;
         generatedCanvases.forEach((item, index) => {
             setTimeout(() => {
                 triggerDownload(item.canvas, item.filename);
             }, delay);
-            delay += 300; // 每張照片間隔 0.3 秒下載
+            delay += 300; 
         });
     }
 </script>
