@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>工程相機浮水印小工具</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif, '微軟正黑體';
+            background-color: #f3f4f6;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        h2 { text-align: center; color: #1e3a8a; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 14px;}
+        input[type="text"], input[type="file"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 16px;
+        }
+        .btn {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            background-color: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        .btn:active { background-color: #1d4ed8; }
+        .btn-success { background-color: #10b981; }
+        .btn-success:active { background-color: #059669; }
+        .btn-warning { background-color: #f59e0b; margin-top: 10px; }
+        .btn-warning:active { background-color: #d97706; }
+        
+        #results-container {
+            margin-top: 20px;
+        }
+        .result-card {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .result-card canvas {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            border-radius: 6px;
+        }
+        .filename-label {
+            font-size: 12px;
+            color: #6b7280;
+            margin-bottom: 8px;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>工程浮水印產生器</h2>
+    
+    <div class="form-group">
+        <label>1. 選擇照片 (支援多選 / 直接拍照)</label>
+        <!-- 加入 multiple 屬性以支援多選 -->
+        <input type="file" id="imageInput" accept="image/*" multiple>
+    </div>
+
+    <div class="form-group">
+        <label>標題 (藍底)</label>
+        <input type="text" id="title" value="臺大總院-線路汰換">
+    </div>
+    <div class="form-group">
+        <label>案名</label>
+        <input type="text" id="projectName" value="國立臺灣大學附設醫院網路擴充案">
+    </div>
+    <div class="form-group">
+        <label>案號</label>
+        <input type="text" id="projectId" value="PA2300949">
+    </div>
+    <div class="form-group">
+        <label>施工地點</label>
+        <input type="text" id="location" value="東址研究棟9樓">
+    </div>
+    <div class="form-group">
+        <label>施工日期</label>
+        <input type="text" id="date" value="2026/05/19">
+    </div>
+    <div class="form-group">
+        <label>施工內容</label>
+        <input type="text" id="content" value="配管佈線作業">
+    </div>
+
+    <button class="btn" onclick="processImages()">產生浮水印圖片</button>
+
+    <!-- 用來存放多張預覽圖的容器 -->
+    <div id="results-container"></div>
+
+    <!-- 批次下載按鈕 (預設隱藏) -->
+    <button class="btn btn-warning" id="batchDownloadBtn" style="display: none;" onclick="downloadAll()">批次下載全部照片</button>
+</div>
+
+<script>
+    // 存放所有產生的 canvas 元素，方便批次下載
+    let generatedCanvases = [];
+
+    // 當使用者變更檔案時，自動清空舊的結果並提示
+    document.getElementById('imageInput').addEventListener('change', function(e){
+        document.getElementById('results-container').innerHTML = '';
+        document.getElementById('batchDownloadBtn').style.display = 'none';
+        generatedCanvases = [];
+    });
+
+    function processImages() {
+        const fileInput = document.getElementById('imageInput');
+        const files = fileInput.files;
+
+        if(files.length === 0) {
+            alert("請先選擇至少一張照片！");
+            return;
+        }
+
+        // 清空前一次的結果
+        const container = document.getElementById('results-container');
+        container.innerHTML = '';
+        generatedCanvases = [];
+        document.getElementById('batchDownloadBtn').style.display = 'none';
+
+        // 讀取每張圖片
+        Array.from(files).forEach((file, index) => {
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const img = new Image();
+                img.onload = function() {
+                    createWatermarkedCard(img, file.name, index);
+                }
+                img.src = event.target.result;
+            }
+            reader.readAsDataURL(file);
+        });
+    }
+
+    function createWatermarkedCard(img, originalFilename, index) {
+        // 建立卡片容器
+        const card = document.createElement('div');
+        card.className = 'result-card';
+
+        // 檔名標籤
+        const fileLabel = document.createElement('div');
+        fileLabel.className = 'filename-label';
+        fileLabel.innerText = `檔案：${originalFilename}`;
+        card.appendChild(fileLabel);
+
+        // 建立 Canvas
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // 設定 Canvas 大小與原圖相同
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0);
+
+        // --- 開始繪製浮水印 ---
+        const title = document.getElementById('title').value;
+        const texts = [
+            `案名：${document.getElementById('projectName').value}`,
+            `案號：${document.getElementById('projectId').value}`,
+            `施工地點：${document.getElementById('location').value}`,
+            `施工日期：${document.getElementById('date').value}`,
+            `施工內容：${document.getElementById('content').value}`
+        ];
+
+        const scale = canvas.width / 1200;
+        const boxWidth = 650 * scale;
+        const titleHeight = 70 * scale;
+        const lineSpacing = 45 * scale;
+        const paddingTop = 15 * scale;
+        const paddingBottom = 20 * scale;
+        
+        const titleFont = `bold ${Math.floor(32 * scale)}px sans-serif`;
+        const contentFont = `${Math.floor(28 * scale)}px sans-serif`;
+
+        ctx.font = contentFont;
+        let wrappedLines = [];
+        const maxTextWidth = boxWidth - (15 * scale);
+
+        texts.forEach(lineText => {
+            let currentLine = "";
+            for(let char of lineText) {
+                let testLine = currentLine + char;
+                let metrics = ctx.measureText(testLine);
+                if(metrics.width <= maxTextWidth) {
+                    currentLine = testLine;
+                } else {
+                    wrappedLines.push(currentLine);
+                    currentLine = char;
+                }
+            }
+            if(currentLine) wrappedLines.push(currentLine);
+        });
+
+        const contentHeight = paddingTop + (wrappedLines.length * lineSpacing) + paddingBottom;
+        const boxHeight = titleHeight + contentHeight;
+
+        const startX = 0;
+        const startY = canvas.height - boxHeight;
+
+        ctx.fillStyle = "rgba(0, 0, 150, 0.78)";
+        ctx.fillRect(startX, startY, boxWidth, titleHeight);
+
+        ctx.fillStyle = "rgba(0, 0, 0, 0.59)";
+        ctx.fillRect(startX, startY + titleHeight, boxWidth, contentHeight);
+
+        ctx.font = titleFont;
+        ctx.fillStyle = "white";
+        ctx.textBaseline = "middle";
+        let titleMetrics = ctx.measureText(title);
+        let titleX = startX + (boxWidth - titleMetrics.width) / 2;
+        let titleY = startY + (titleHeight / 2);
+        ctx.fillText(title, titleX, titleY);
+
+        ctx.font = contentFont;
+        ctx.textBaseline = "top";
+        let currentY = startY + titleHeight + paddingTop;
+        let textX = startX + (5 * scale);
+
+        wrappedLines.forEach(line => {
+            ctx.fillText(line, textX, currentY);
+            currentY += lineSpacing;
+        });
+        // --- 結束繪製浮水印 ---
+
+        // 將完成的 canvas 加入到陣列中以供批次下載
+        const dlFilename = `工程照片_${index}_${new Date().getTime()}.jpg`;
+        generatedCanvases.push({ canvas: canvas, filename: dlFilename });
+
+        // 將 Canvas 加入卡片
+        card.appendChild(canvas);
+
+        // 建立單張下載按鈕
+        const downloadBtn = document.createElement('button');
+        downloadBtn.className = 'btn btn-success';
+        downloadBtn.innerText = '下載此照片';
+        downloadBtn.onclick = function() {
+            triggerDownload(canvas, dlFilename);
+        };
+        card.appendChild(downloadBtn);
+
+        // 將卡片加入到主畫面
+        document.getElementById('results-container').appendChild(card);
+
+        // 顯示批次下載按鈕 (如果有多於一張照片)
+        if(generatedCanvases.length > 0) {
+            document.getElementById('batchDownloadBtn').style.display = 'block';
+        }
+    }
+
+    function triggerDownload(canvas, filename) {
+        const link = document.createElement('a');
+        link.download = filename;
+        link.href = canvas.toDataURL('image/jpeg', 0.95);
+        document.body.appendChild(link); // 某些瀏覽器需要將 a 標籤加入 DOM 才能點擊
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    function downloadAll() {
+        if(generatedCanvases.length === 0) return;
+        
+        // 為了避免手機瀏覽器阻擋同時彈出多個下載，設定微小的延遲依序下載
+        let delay = 0;
+        generatedCanvases.forEach((item, index) => {
+            setTimeout(() => {
+                triggerDownload(item.canvas, item.filename);
+            }, delay);
+            delay += 300; // 每張照片間隔 0.3 秒下載
+        });
+    }
+</script>
+</body>
+</html>
