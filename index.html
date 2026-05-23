@@ -127,6 +127,7 @@
 
     <div id="results-container"></div>
     <button class="btn btn-warning" id="batchDownloadBtn" style="display: none;" onclick="downloadAll()">批次下載全部照片</button>
+    <button class="btn btn-share" id="batchShareBtn" style="display: none;" onclick="shareAll()">批次分享全部照片 (LINE/雲端等)</button>
 </div>
 
 <script>
@@ -219,6 +220,7 @@
     document.getElementById('imageInput').addEventListener('change', function(e){
         document.getElementById('results-container').innerHTML = '';
         document.getElementById('batchDownloadBtn').style.display = 'none';
+        document.getElementById('batchShareBtn').style.display = 'none';
         generatedCanvases = [];
     });
 
@@ -240,6 +242,7 @@
         container.innerHTML = '';
         generatedCanvases = [];
         document.getElementById('batchDownloadBtn').style.display = 'none';
+        document.getElementById('batchShareBtn').style.display = 'none';
 
         Array.from(files).forEach((file, index) => {
             const reader = new FileReader();
@@ -380,6 +383,7 @@
 
         if(generatedCanvases.length > 0) {
             document.getElementById('batchDownloadBtn').style.display = 'block';
+            document.getElementById('batchShareBtn').style.display = 'block';
         }
     }
 
@@ -393,13 +397,11 @@
         document.body.removeChild(link);
     }
 
-    // 新增：呼叫手機原生分享選單
+    // 單張分享
     async function shareImage(canvas, filename) {
-        // 先將 Canvas 轉為 Blob 檔案格式
         canvas.toBlob(async function(blob) {
             const file = new File([blob], filename, { type: 'image/jpeg' });
             
-            // 檢查裝置/瀏覽器是否支援檔案分享 API
             if (navigator.canShare && navigator.canShare({ files: [file] })) {
                 try {
                     await navigator.share({
@@ -416,6 +418,7 @@
         }, 'image/jpeg', 0.85);
     }
 
+    // 批次下載
     function downloadAll() {
         if(generatedCanvases.length === 0) return;
         
@@ -426,6 +429,43 @@
             }, delay);
             delay += 300; 
         });
+    }
+
+    // 新增：批次分享全部
+    async function shareAll() {
+        if (generatedCanvases.length === 0) return;
+
+        // 建立一個檢查用的小檔案來確定瀏覽器是否支援批次分享
+        const testFile = new File([''], 'test.txt', { type: 'text/plain' });
+        if (!(navigator.canShare && navigator.canShare({ files: [testFile] }))) {
+            alert('您的裝置或瀏覽器不支援「批次」分享功能，請單張分享或改用「批次下載」！\n（建議使用手機的 Safari 或 Chrome 瀏覽器操作）');
+            return;
+        }
+
+        try {
+            // 將所有 Canvas 轉換為檔案陣列 (使用 Promise.all 等待全數轉檔完成)
+            const filesToShare = await Promise.all(generatedCanvases.map(item => {
+                return new Promise((resolve) => {
+                    item.canvas.toBlob((blob) => {
+                        const file = new File([blob], item.filename, { type: 'image/jpeg' });
+                        resolve(file);
+                    }, 'image/jpeg', 0.85);
+                });
+            }));
+
+            // 檢查一次分享多個檔案是否在裝置容許範圍內
+            if (navigator.canShare({ files: filesToShare })) {
+                await navigator.share({
+                    files: filesToShare,
+                    title: '工程照片批次分享',
+                    text: '請查看工程照片批次附件'
+                });
+            } else {
+                alert('照片數量或檔案大小超出了裝置的分享限制，請分批分享或改用「批次下載」！');
+            }
+        } catch (error) {
+            console.log('批次分享取消或發生錯誤:', error);
+        }
     }
 </script>
 </body>
