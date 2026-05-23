@@ -54,6 +54,8 @@
         .btn-success:active { background-color: #059669; }
         .btn-warning { background-color: #f59e0b; margin-top: 10px; }
         .btn-warning:active { background-color: #d97706; }
+        .btn-share { background-color: #8b5cf6; margin-top: 10px; } /* 新增分享按鈕樣式 */
+        .btn-share:active { background-color: #7c3aed; }
         
         #results-container {
             margin-top: 20px;
@@ -356,6 +358,7 @@
 
         card.appendChild(canvas);
 
+        // 下載按鈕
         const downloadBtn = document.createElement('button');
         downloadBtn.className = 'btn btn-success';
         downloadBtn.innerText = '下載此照片';
@@ -363,6 +366,15 @@
             triggerDownload(canvas, dlFilename);
         };
         card.appendChild(downloadBtn);
+
+        // 分享按鈕 (呼叫原生分享介面)
+        const shareBtn = document.createElement('button');
+        shareBtn.className = 'btn btn-share';
+        shareBtn.innerText = '分享此照片 (LINE/雲端等)';
+        shareBtn.onclick = function() {
+            shareImage(canvas, dlFilename);
+        };
+        card.appendChild(shareBtn);
 
         document.getElementById('results-container').appendChild(card);
 
@@ -379,6 +391,29 @@
         document.body.appendChild(link); 
         link.click();
         document.body.removeChild(link);
+    }
+
+    // 新增：呼叫手機原生分享選單
+    async function shareImage(canvas, filename) {
+        // 先將 Canvas 轉為 Blob 檔案格式
+        canvas.toBlob(async function(blob) {
+            const file = new File([blob], filename, { type: 'image/jpeg' });
+            
+            // 檢查裝置/瀏覽器是否支援檔案分享 API
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                try {
+                    await navigator.share({
+                        files: [file],
+                        title: '工程照片',
+                        text: '請查看工程照片附件'
+                    });
+                } catch (error) {
+                    console.log('使用者取消分享或發生錯誤:', error);
+                }
+            } else {
+                alert('您的裝置或瀏覽器不支援直接分享圖片功能，請先「下載」後再自行傳送！\n（建議使用手機的 Safari 或 Chrome 瀏覽器操作）');
+            }
+        }, 'image/jpeg', 0.85);
     }
 
     function downloadAll() {
