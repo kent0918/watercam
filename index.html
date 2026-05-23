@@ -356,7 +356,12 @@
             currentY += lineSpacing;
         });
 
-        const dlFilename = `工程照片_${index}_${new Date().getTime()}.jpg`;
+        // 產生檔名：工程相機_YYYYMMDD_序號
+        const now = new Date();
+        const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+        const seqStr = String(index + 1).padStart(2, '0'); // 自動補零，變成 01, 02...
+        const dlFilename = `工程相機_${dateStr}_${seqStr}.jpg`;
+
         generatedCanvases.push({ canvas: canvas, filename: dlFilename });
 
         card.appendChild(canvas);
