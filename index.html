@@ -22,7 +22,24 @@
         }
         h2 { text-align: center; color: #1e3a8a; }
         .form-group { margin-bottom: 15px; }
-        label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 14px;}
+        
+        /* 新增：讓核取方塊與文字對齊的樣式 */
+        .checkbox-label { 
+            display: flex; 
+            align-items: center; 
+            gap: 8px; 
+            margin-bottom: 5px; 
+            font-weight: bold; 
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .checkbox-label input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            margin: 0;
+        }
+
         input[type="text"], input[type="file"] {
             width: 100%;
             padding: 10px;
@@ -54,7 +71,7 @@
         .btn-success:active { background-color: #059669; }
         .btn-warning { background-color: #f59e0b; margin-top: 10px; }
         .btn-warning:active { background-color: #d97706; }
-        .btn-share { background-color: #8b5cf6; margin-top: 10px; } /* 新增分享按鈕樣式 */
+        .btn-share { background-color: #8b5cf6; margin-top: 10px; } 
         .btn-share:active { background-color: #7c3aed; }
         
         #results-container {
@@ -88,37 +105,60 @@
     <h2>工程浮水印產生器</h2>
     
     <div class="form-group">
-        <label>1. 選擇照片 (支援多選 / 直接拍照)</label>
+        <label style="display: block; margin-bottom: 5px; font-weight: bold; font-size: 14px;">1. 選擇照片 (支援多選 / 直接拍照)</label>
         <input type="file" id="imageInput" accept="image/*" multiple>
     </div>
 
+    <!-- 加入核取方塊 (Checkbox) 控制顯示與否 -->
     <div class="form-group">
-        <label>標題 (藍底)</label>
+        <label class="checkbox-label">
+            <input type="checkbox" id="check_title" checked> 標題 (藍底)
+        </label>
         <input type="text" id="title" value="臺大總院-線路汰換" list="list_title">
         <datalist id="list_title"></datalist>
     </div>
     <div class="form-group">
-        <label>案名</label>
+        <label class="checkbox-label">
+            <input type="checkbox" id="check_projectName" checked> 案名
+        </label>
         <input type="text" id="projectName" value="網路線佈線汰換暨光纖線路及網路設備擴充案" list="list_projectName">
         <datalist id="list_projectName"></datalist>
     </div>
     <div class="form-group">
-        <label>案號</label>
+        <label class="checkbox-label">
+            <input type="checkbox" id="check_projectId" checked> 案號
+        </label>
         <input type="text" id="projectId" value="PA2300949" list="list_projectId">
         <datalist id="list_projectId"></datalist>
     </div>
+    
+    <!-- 新增：施工單位 -->
     <div class="form-group">
-        <label>施工地點</label>
+        <label class="checkbox-label">
+            <input type="checkbox" id="check_contractor" checked> 施工單位
+        </label>
+        <input type="text" id="contractor" value="某某工程股份有限公司" list="list_contractor">
+        <datalist id="list_contractor"></datalist>
+    </div>
+
+    <div class="form-group">
+        <label class="checkbox-label">
+            <input type="checkbox" id="check_location" checked> 施工地點
+        </label>
         <input type="text" id="location" value="東址研究棟9樓" list="list_location">
         <datalist id="list_location"></datalist>
     </div>
     <div class="form-group">
-        <label>施工日期</label>
+        <label class="checkbox-label">
+            <input type="checkbox" id="check_date" checked> 施工日期
+        </label>
         <input type="text" id="date" value="" list="list_date">
         <datalist id="list_date"></datalist>
     </div>
     <div class="form-group">
-        <label>施工內容</label>
+        <label class="checkbox-label">
+            <input type="checkbox" id="check_content" checked> 施工內容
+        </label>
         <input type="text" id="content" value="配管佈線作業" list="list_content">
         <datalist id="list_content"></datalist>
     </div>
@@ -132,8 +172,8 @@
 
 <script>
     let generatedCanvases = [];
-    // 必須追蹤的欄位 ID
-    const inputFields = ['title', 'projectName', 'projectId', 'location', 'date', 'content'];
+    // 必須追蹤的欄位 ID (加入 contractor)
+    const inputFields = ['title', 'projectName', 'projectId', 'contractor', 'location', 'date', 'content'];
 
     // 網頁載入時執行：還原上次輸入狀態與下拉選單紀錄
     window.onload = function() {
@@ -150,17 +190,21 @@
         // 3. 更新下拉選單
         updateAllDataLists();
         
-        // 4. 監聽輸入框變化：只要打字就自動存檔，避免重整遺失
+        // 4. 監聽輸入框與核取方塊變化：只要打字或打勾就自動存檔，避免重整遺失
         inputFields.forEach(field => {
             document.getElementById(field).addEventListener('input', saveCurrentState);
+            document.getElementById('check_' + field).addEventListener('change', saveCurrentState);
         });
     };
 
-    // 自動儲存目前的輸入狀態
+    // 自動儲存目前的輸入狀態 (包含文字與打勾狀態)
     function saveCurrentState() {
         let currentState = {};
         inputFields.forEach(field => {
-            currentState[field] = document.getElementById(field).value;
+            currentState[field] = {
+                value: document.getElementById(field).value,
+                checked: document.getElementById('check_' + field).checked
+            };
         });
         localStorage.setItem('watermark_current_state', JSON.stringify(currentState));
     }
@@ -173,7 +217,13 @@
                 const parsedState = JSON.parse(savedState);
                 inputFields.forEach(field => {
                     if (parsedState[field] !== undefined) {
-                        document.getElementById(field).value = parsedState[field];
+                        // 相容舊版紀錄格式 (單純字串) 與新版格式 (物件包含打勾狀態)
+                        if (typeof parsedState[field] === 'string') {
+                            document.getElementById(field).value = parsedState[field];
+                        } else {
+                            document.getElementById(field).value = parsedState[field].value;
+                            document.getElementById('check_' + field).checked = parsedState[field].checked;
+                        }
                     }
                 });
             } catch (e) {
@@ -188,10 +238,8 @@
             const val = document.getElementById(field).value.trim();
             if (val !== "") {
                 let history = JSON.parse(localStorage.getItem(`history_${field}`)) || [];
-                // 如果已經存在相同的紀錄，先移除舊的，再把新的加到最前面
                 history = history.filter(item => item !== val);
                 history.unshift(val);
-                // 限制最多 10 筆
                 if (history.length > 10) {
                     history = history.slice(0, 10);
                 }
@@ -207,7 +255,7 @@
             const history = JSON.parse(localStorage.getItem(`history_${field}`)) || [];
             const datalist = document.getElementById(`list_${field}`);
             if (datalist) {
-                datalist.innerHTML = ''; // 清空舊選項
+                datalist.innerHTML = ''; 
                 history.forEach(item => {
                     const option = document.createElement('option');
                     option.value = item;
@@ -233,9 +281,7 @@
             return;
         }
 
-        // 點擊產生時，將當前輸入存入歷史紀錄
         saveToHistory();
-        // 確保當前狀態有被儲存
         saveCurrentState();
 
         const container = document.getElementById('results-container');
@@ -269,7 +315,6 @@
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         
-        // 限制輸出圖片的最大尺寸，控制檔案大小與 DPI 相當的畫質 (約 1600px)
         const MAX_SIZE = 1600;
         let targetWidth = img.width;
         let targetHeight = img.height;
@@ -288,21 +333,28 @@
         canvas.height = targetHeight;
         ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
 
-        const title = document.getElementById('title').value;
-        const texts = [
-            `案名：${document.getElementById('projectName').value}`,
-            `案號：${document.getElementById('projectId').value}`,
-            `施工地點：${document.getElementById('location').value}`,
-            `施工日期：${document.getElementById('date').value}`,
-            `施工內容：${document.getElementById('content').value}`
-        ];
+        // 動態判斷要顯示的內容
+        const showTitle = document.getElementById('check_title').checked;
+        const titleText = document.getElementById('title').value;
+
+        let texts = [];
+        if (document.getElementById('check_projectName').checked) texts.push(`案名：${document.getElementById('projectName').value}`);
+        if (document.getElementById('check_projectId').checked) texts.push(`案號：${document.getElementById('projectId').value}`);
+        if (document.getElementById('check_contractor').checked) texts.push(`施工單位：${document.getElementById('contractor').value}`);
+        if (document.getElementById('check_location').checked) texts.push(`施工地點：${document.getElementById('location').value}`);
+        if (document.getElementById('check_date').checked) texts.push(`施工日期：${document.getElementById('date').value}`);
+        if (document.getElementById('check_content').checked) texts.push(`施工內容：${document.getElementById('content').value}`);
 
         const scale = canvas.width / 1200;
         const boxWidth = 650 * scale;
-        const titleHeight = 70 * scale;
+        
+        // 只有在勾選標題時才給予藍底高度
+        const titleHeight = showTitle ? (70 * scale) : 0; 
         const lineSpacing = 45 * scale;
-        const paddingTop = 15 * scale;
-        const paddingBottom = 20 * scale;
+        
+        // 只有在有內文時才給予上下留白
+        const paddingTop = texts.length > 0 ? (15 * scale) : 0;
+        const paddingBottom = texts.length > 0 ? (20 * scale) : 0;
         
         const titleFont = `bold ${Math.floor(32 * scale)}px sans-serif`;
         const contentFont = `${Math.floor(28 * scale)}px sans-serif`;
@@ -329,44 +381,51 @@
         const contentHeight = paddingTop + (wrappedLines.length * lineSpacing) + paddingBottom;
         const boxHeight = titleHeight + contentHeight;
 
-        const startX = 0;
-        const startY = canvas.height - boxHeight;
+        // 如果甚麼都沒勾選，就不畫浮水印
+        if (boxHeight > 0) {
+            const startX = 0;
+            const startY = canvas.height - boxHeight;
 
-        ctx.fillStyle = "rgba(0, 0, 150, 0.78)";
-        ctx.fillRect(startX, startY, boxWidth, titleHeight);
+            // 繪製藍底與標題文字
+            if (showTitle) {
+                ctx.fillStyle = "rgba(0, 0, 150, 0.78)";
+                ctx.fillRect(startX, startY, boxWidth, titleHeight);
 
-        ctx.fillStyle = "rgba(0, 0, 0, 0.59)";
-        ctx.fillRect(startX, startY + titleHeight, boxWidth, contentHeight);
+                ctx.font = titleFont;
+                ctx.fillStyle = "white";
+                ctx.textBaseline = "middle";
+                let titleMetrics = ctx.measureText(titleText);
+                let titleX = startX + (boxWidth - titleMetrics.width) / 2;
+                let titleY = startY + (titleHeight / 2);
+                ctx.fillText(titleText, titleX, titleY);
+            }
 
-        ctx.font = titleFont;
-        ctx.fillStyle = "white";
-        ctx.textBaseline = "middle";
-        let titleMetrics = ctx.measureText(title);
-        let titleX = startX + (boxWidth - titleMetrics.width) / 2;
-        let titleY = startY + (titleHeight / 2);
-        ctx.fillText(title, titleX, titleY);
+            // 繪製黑底與內容文字
+            if (contentHeight > 0) {
+                ctx.fillStyle = "rgba(0, 0, 0, 0.59)";
+                ctx.fillRect(startX, startY + titleHeight, boxWidth, contentHeight);
 
-        ctx.font = contentFont;
-        ctx.textBaseline = "top";
-        let currentY = startY + titleHeight + paddingTop;
-        let textX = startX + (5 * scale);
+                ctx.font = contentFont;
+                ctx.textBaseline = "top";
+                let currentY = startY + titleHeight + paddingTop;
+                let textX = startX + (5 * scale);
 
-        wrappedLines.forEach(line => {
-            ctx.fillText(line, textX, currentY);
-            currentY += lineSpacing;
-        });
+                wrappedLines.forEach(line => {
+                    ctx.fillText(line, textX, currentY);
+                    currentY += lineSpacing;
+                });
+            }
+        }
 
-        // 產生檔名：工程相機_YYYYMMDD_序號
         const now = new Date();
         const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
-        const seqStr = String(index + 1).padStart(2, '0'); // 自動補零，變成 01, 02...
+        const seqStr = String(index + 1).padStart(2, '0'); 
         const dlFilename = `工程相機_${dateStr}_${seqStr}.jpg`;
 
         generatedCanvases.push({ canvas: canvas, filename: dlFilename });
 
         card.appendChild(canvas);
 
-        // 下載按鈕
         const downloadBtn = document.createElement('button');
         downloadBtn.className = 'btn btn-success';
         downloadBtn.innerText = '下載此照片';
@@ -375,7 +434,6 @@
         };
         card.appendChild(downloadBtn);
 
-        // 分享按鈕 (呼叫原生分享介面)
         const shareBtn = document.createElement('button');
         shareBtn.className = 'btn btn-share';
         shareBtn.innerText = '分享此照片 (LINE/雲端等)';
@@ -395,14 +453,12 @@
     function triggerDownload(canvas, filename) {
         const link = document.createElement('a');
         link.download = filename;
-        // 將圖片品質從 0.95 降至 0.85，以大幅縮小檔案體積，且肉眼幾乎看不出差異
         link.href = canvas.toDataURL('image/jpeg', 0.85);
         document.body.appendChild(link); 
         link.click();
         document.body.removeChild(link);
     }
 
-    // 單張分享
     async function shareImage(canvas, filename) {
         canvas.toBlob(async function(blob) {
             const file = new File([blob], filename, { type: 'image/jpeg' });
@@ -418,12 +474,11 @@
                     console.log('使用者取消分享或發生錯誤:', error);
                 }
             } else {
-                alert('您的裝置或瀏覽器不支援直接分享圖片功能，請先「下載」後再自行傳送！\n（建議使用手機的 Safari 或 Chrome 瀏覽器操作）');
+                alert('您的裝置或瀏覽器不支援直接分享圖片功能，請先「下載」後再自行傳送！');
             }
         }, 'image/jpeg', 0.85);
     }
 
-    // 批次下載
     function downloadAll() {
         if(generatedCanvases.length === 0) return;
         
@@ -436,19 +491,16 @@
         });
     }
 
-    // 新增：批次分享全部
     async function shareAll() {
         if (generatedCanvases.length === 0) return;
 
-        // 建立一個檢查用的小檔案來確定瀏覽器是否支援批次分享
         const testFile = new File([''], 'test.txt', { type: 'text/plain' });
         if (!(navigator.canShare && navigator.canShare({ files: [testFile] }))) {
-            alert('您的裝置或瀏覽器不支援「批次」分享功能，請單張分享或改用「批次下載」！\n（建議使用手機的 Safari 或 Chrome 瀏覽器操作）');
+            alert('您的裝置或瀏覽器不支援「批次」分享功能，請單張分享或改用「批次下載」！');
             return;
         }
 
         try {
-            // 將所有 Canvas 轉換為檔案陣列 (使用 Promise.all 等待全數轉檔完成)
             const filesToShare = await Promise.all(generatedCanvases.map(item => {
                 return new Promise((resolve) => {
                     item.canvas.toBlob((blob) => {
@@ -458,7 +510,6 @@
                 });
             }));
 
-            // 檢查一次分享多個檔案是否在裝置容許範圍內
             if (navigator.canShare({ files: filesToShare })) {
                 await navigator.share({
                     files: filesToShare,
