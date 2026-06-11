@@ -23,7 +23,6 @@
         h2 { text-align: center; color: #1e3a8a; }
         .form-group { margin-bottom: 15px; }
         
-        /* 新增：讓核取方塊與文字對齊的樣式 */
         .checkbox-label { 
             display: flex; 
             align-items: center; 
@@ -48,11 +47,17 @@
             box-sizing: border-box;
             font-size: 16px;
         }
-        /* 讓輸入框右側出現下拉箭頭的提示 (依瀏覽器支援程度顯示) */
         input::-webkit-calendar-picker-indicator {
             opacity: 1;
             cursor: pointer;
         }
+        
+        /* 新增：讓自訂欄位排版並列的樣式 */
+        .flex-row {
+            display: flex;
+            gap: 10px;
+        }
+
         .btn {
             display: block;
             width: 100%;
@@ -109,7 +114,6 @@
         <input type="file" id="imageInput" accept="image/*" multiple>
     </div>
 
-    <!-- 加入核取方塊 (Checkbox) 控制顯示與否 -->
     <div class="form-group">
         <label class="checkbox-label">
             <input type="checkbox" id="check_title" checked> 標題 (藍底)
@@ -132,7 +136,6 @@
         <datalist id="list_projectId"></datalist>
     </div>
     
-    <!-- 新增：施工單位 -->
     <div class="form-group">
         <label class="checkbox-label">
             <input type="checkbox" id="check_contractor" checked> 施工單位
@@ -163,6 +166,17 @@
         <datalist id="list_content"></datalist>
     </div>
 
+    <div class="form-group">
+        <label class="checkbox-label">
+            <input type="checkbox" id="check_customField" checked> 自訂欄位
+        </label>
+        <div class="flex-row">
+            <input type="text" id="customLabel" value="備註" placeholder="欄位名稱" style="flex: 1;">
+            <input type="text" id="customField" value="" list="list_customField" placeholder="欄位內容" style="flex: 2;">
+        </div>
+        <datalist id="list_customField"></datalist>
+    </div>
+
     <button class="btn" onclick="processImages()">產生浮水印圖片</button>
 
     <div id="results-container"></div>
@@ -172,32 +186,29 @@
 
 <script>
     let generatedCanvases = [];
-    // 必須追蹤的欄位 ID (加入 contractor)
-    const inputFields = ['title', 'projectName', 'projectId', 'contractor', 'location', 'date', 'content'];
+    // 將 customField 加入追蹤陣列 (不含 customLabel，因其不需歷史下拉清單，稍後獨立儲存)
+    const inputFields = ['title', 'projectName', 'projectId', 'contractor', 'location', 'date', 'content', 'customField'];
 
-    // 網頁載入時執行：還原上次輸入狀態與下拉選單紀錄
     window.onload = function() {
-        // 1. 先讀取上次的記憶
         loadLastState();
         
-        // 2. 強制將日期覆蓋為「當日日期」 (格式: YYYY/MM/DD)
         const today = new Date();
         const yyyy = today.getFullYear();
         const mm = String(today.getMonth() + 1).padStart(2, '0');
         const dd = String(today.getDate()).padStart(2, '0');
         document.getElementById('date').value = `${yyyy}/${mm}/${dd}`;
         
-        // 3. 更新下拉選單
         updateAllDataLists();
         
-        // 4. 監聽輸入框與核取方塊變化：只要打字或打勾就自動存檔，避免重整遺失
         inputFields.forEach(field => {
             document.getElementById(field).addEventListener('input', saveCurrentState);
             document.getElementById('check_' + field).addEventListener('change', saveCurrentState);
         });
+        
+        // 額外監聽自訂標籤的輸入以利自動儲存
+        document.getElementById('customLabel').addEventListener('input', saveCurrentState);
     };
 
-    // 自動儲存目前的輸入狀態 (包含文字與打勾狀態)
     function saveCurrentState() {
         let currentState = {};
         inputFields.forEach(field => {
@@ -206,10 +217,11 @@
                 checked: document.getElementById('check_' + field).checked
             };
         });
+        // 獨立儲存自訂欄位的標籤名稱
+        currentState['customLabel'] = document.getElementById('customLabel').value;
         localStorage.setItem('watermark_current_state', JSON.stringify(currentState));
     }
 
-    // 讀取上次的輸入狀態
     function loadLastState() {
         const savedState = localStorage.getItem('watermark_current_state');
         if (savedState) {
@@ -217,7 +229,6 @@
                 const parsedState = JSON.parse(savedState);
                 inputFields.forEach(field => {
                     if (parsedState[field] !== undefined) {
-                        // 相容舊版紀錄格式 (單純字串) 與新版格式 (物件包含打勾狀態)
                         if (typeof parsedState[field] === 'string') {
                             document.getElementById(field).value = parsedState[field];
                         } else {
@@ -226,13 +237,15 @@
                         }
                     }
                 });
+                if (parsedState['customLabel'] !== undefined) {
+                    document.getElementById('customLabel').value = parsedState['customLabel'];
+                }
             } catch (e) {
                 console.error("讀取狀態失敗", e);
             }
         }
     }
 
-    // 將本次輸入的內容存入下拉選單歷史紀錄 (最多 10 筆)
     function saveToHistory() {
         inputFields.forEach(field => {
             const val = document.getElementById(field).value.trim();
@@ -249,7 +262,6 @@
         updateAllDataLists();
     }
 
-    // 更新所有下拉選單的選項
     function updateAllDataLists() {
         inputFields.forEach(field => {
             const history = JSON.parse(localStorage.getItem(`history_${field}`)) || [];
@@ -333,7 +345,6 @@
         canvas.height = targetHeight;
         ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
 
-        // 動態判斷要顯示的內容
         const showTitle = document.getElementById('check_title').checked;
         const titleText = document.getElementById('title').value;
 
@@ -344,15 +355,20 @@
         if (document.getElementById('check_location').checked) texts.push(`施工地點：${document.getElementById('location').value}`);
         if (document.getElementById('check_date').checked) texts.push(`施工日期：${document.getElementById('date').value}`);
         if (document.getElementById('check_content').checked) texts.push(`施工內容：${document.getElementById('content').value}`);
+        
+        // 新增：處理自訂欄位的字串組合
+        if (document.getElementById('check_customField').checked) {
+            const customLabel = document.getElementById('customLabel').value || '自訂';
+            const customValue = document.getElementById('customField').value;
+            texts.push(`${customLabel}：${customValue}`);
+        }
 
         const scale = canvas.width / 1200;
         const boxWidth = 650 * scale;
         
-        // 只有在勾選標題時才給予藍底高度
         const titleHeight = showTitle ? (70 * scale) : 0; 
         const lineSpacing = 45 * scale;
         
-        // 只有在有內文時才給予上下留白
         const paddingTop = texts.length > 0 ? (15 * scale) : 0;
         const paddingBottom = texts.length > 0 ? (20 * scale) : 0;
         
@@ -381,12 +397,10 @@
         const contentHeight = paddingTop + (wrappedLines.length * lineSpacing) + paddingBottom;
         const boxHeight = titleHeight + contentHeight;
 
-        // 如果甚麼都沒勾選，就不畫浮水印
         if (boxHeight > 0) {
             const startX = 0;
             const startY = canvas.height - boxHeight;
 
-            // 繪製藍底與標題文字
             if (showTitle) {
                 ctx.fillStyle = "rgba(0, 0, 150, 0.78)";
                 ctx.fillRect(startX, startY, boxWidth, titleHeight);
@@ -400,14 +414,13 @@
                 ctx.fillText(titleText, titleX, titleY);
             }
 
-            // 繪製黑底與內容文字
             if (contentHeight > 0) {
                 ctx.fillStyle = "rgba(0, 0, 0, 0.59)";
                 ctx.fillRect(startX, startY + titleHeight, boxWidth, contentHeight);
 
                 ctx.font = contentFont;
                 ctx.textBaseline = "top";
-                ctx.fillStyle = "white"; // 確保此處文字顏色設定為純白色
+                ctx.fillStyle = "white"; 
                 let currentY = startY + titleHeight + paddingTop;
                 let textX = startX + (5 * scale);
 
